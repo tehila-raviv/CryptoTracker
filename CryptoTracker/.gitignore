@@ -1,0 +1,54 @@
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.vcxproj.filters
+*.vcxproj.user
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Visual Studio cache/options
+.vscode/
+*.opensdf
+*.sdf
+*.opendb
+*.VC.db
+*.VC.VC.opendb
+
+# Build outputs
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.obj
+*.tlog
+*.log
+*.iobj
+*.ipdb
+*.idb
+
+# User-specific files
+*.rsuser
+
+# Auto-generated files
+*.aps
+*.ncb
+*.opensdf
+*.cachefile
+*.VC.db
+*.VC.VC.opendb
+
+# Keep data folder but ignore contents (except .gitkeep)
+data/*
+!data/.gitkeep
