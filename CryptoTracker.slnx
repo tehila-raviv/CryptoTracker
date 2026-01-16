@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="CryptoTracker/CryptoTracker.vcxproj" Id="c736a83c-8533-47da-ac1b-c99136273e6f" />
+</Solution>
