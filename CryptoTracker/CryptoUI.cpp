@@ -47,7 +47,9 @@ void CryptoUI::RenderWatchlist() {
     ImGui::Text("My Watchlist");
     ImGui::Separator();
 
-    auto watchlist = price_manager->GetWatchlistCoins();
+    // COPY watchlist data first
+    std::vector<Coin> watchlist = price_manager->GetWatchlistCoins();
+    // No lock held during rendering!
 
     if (watchlist.empty()) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
@@ -62,9 +64,6 @@ void CryptoUI::RenderWatchlist() {
         ImGui::TableSetupColumn("24h Change", ImGuiTableColumnFlags_WidthFixed, 100);
         ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 80);
         ImGui::TableHeadersRow();
-
-        // Lock mutex for reading
-        std::lock_guard<std::mutex> lock(price_manager->GetMutex());
 
         for (const auto& coin : watchlist) {
             ImGui::TableNextRow();
@@ -95,7 +94,7 @@ void CryptoUI::RenderWatchlist() {
         ImGui::EndTable();
     }
 
-    // Calculate total if user wants to add portfolio feature later
+    // Calculate total
     ImGui::Separator();
     ImGui::Text("Total Coins: %d", (int)watchlist.size());
 }
@@ -118,6 +117,14 @@ void CryptoUI::RenderAllCoins() {
 
     ImGui::Separator();
 
+    // COPY coin data before rendering - don't hold lock during UI interaction
+    std::vector<Coin> coins_copy;
+    {
+        std::lock_guard<std::mutex> lock(price_manager->GetMutex());
+        coins_copy = price_manager->GetCoins();
+    }
+    // Lock is released here!
+
     // Table for all coins
     if (ImGui::BeginTable("AllCoinsTable", 5,
         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
@@ -130,14 +137,10 @@ void CryptoUI::RenderAllCoins() {
         ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 80);
         ImGui::TableHeadersRow();
 
-        // Lock mutex for reading
-        std::lock_guard<std::mutex> lock(price_manager->GetMutex());
-        auto& coins = price_manager->GetCoins();
-
         std::string search_term(search_buffer);
         std::transform(search_term.begin(), search_term.end(), search_term.begin(), ::tolower);
 
-        for (const auto& coin : coins) {
+        for (const auto& coin : coins_copy) {  // Use the copy, not the reference!
             // Apply filters
             if (show_only_watchlist && !coin.in_watchlist) {
                 continue;
@@ -176,7 +179,7 @@ void CryptoUI::RenderAllCoins() {
                 ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red
             ImGui::TextColored(color, "%s", FormatChange(coin.change_24h).c_str());
 
-            // Add/Remove button
+            // Add/Remove button - NO LOCK HELD HERE!
             ImGui::TableNextColumn();
             if (coin.in_watchlist) {
                 std::string button_label = "Remove##" + coin.id;
