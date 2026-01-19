@@ -1,5 +1,4 @@
 #include "PriceManager.h"
-#include <httplib.h>
 #include <json.hpp>
 #include <fstream>
 #include <filesystem>
@@ -7,9 +6,84 @@
 #include <iomanip>
 #include <sstream>
 #include <iostream>
+#include <windows.h>
+#include <winhttp.h>
+
+#pragma comment(lib, "winhttp.lib")
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+
+// Helper function to make HTTP GET request using WinHTTP
+std::string HttpGet(const std::wstring& server, const std::wstring& path) {
+    std::string response;
+
+    HINTERNET hSession = WinHttpOpen(L"CryptoTracker/1.0",
+        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_NO_PROXY_NAME,
+        WINHTTP_NO_PROXY_BYPASS, 0);
+
+    if (!hSession) return "";
+
+    HINTERNET hConnect = WinHttpConnect(hSession, server.c_str(),
+        INTERNET_DEFAULT_HTTP_PORT, 0);
+
+    if (!hConnect) {
+        WinHttpCloseHandle(hSession);
+        return "";
+    }
+
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(),
+        NULL, WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES,
+        0);
+
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return "";
+    }
+
+    BOOL bResults = WinHttpSendRequest(hRequest,
+        WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+        WINHTTP_NO_REQUEST_DATA, 0,
+        0, 0);
+
+    if (bResults) {
+        bResults = WinHttpReceiveResponse(hRequest, NULL);
+    }
+
+    if (bResults) {
+        DWORD dwSize = 0;
+        DWORD dwDownloaded = 0;
+
+        do {
+            dwSize = 0;
+            if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) {
+                break;
+            }
+
+            char* pszOutBuffer = new char[dwSize + 1];
+            ZeroMemory(pszOutBuffer, dwSize + 1);
+
+            if (!WinHttpReadData(hRequest, (LPVOID)pszOutBuffer,
+                dwSize, &dwDownloaded)) {
+                delete[] pszOutBuffer;
+                break;
+            }
+
+            response.append(pszOutBuffer, dwDownloaded);
+            delete[] pszOutBuffer;
+
+        } while (dwSize > 0);
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+
+    return response;
+}
 
 PriceManager::PriceManager() : should_stop(false), is_connected(false) {
     InitializeCoins();
@@ -29,12 +103,14 @@ PriceManager::~PriceManager() {
     }
 
     // Save watchlist before exit
-    SaveWatchlist();
+    {
+        std::lock_guard<std::mutex> lock(data_mutex);
+        SaveWatchlist();
+    }
 }
 
 void PriceManager::InitializeCoins() {
     // Initialize with 20 popular cryptocurrencies
-    // Using CoinGecko IDs, symbols, and names
     coins = {
         Coin("bitcoin", "BTC", "Bitcoin"),
         Coin("ethereum", "ETH", "Ethereum"),
@@ -85,8 +161,7 @@ void PriceManager::AddToWatchlist(const std::string& coinId) {
             break;
         }
     }
-
-    SaveWatchlist();
+    // Don't save here - will save on app close
 }
 
 void PriceManager::RemoveFromWatchlist(const std::string& coinId) {
@@ -98,8 +173,7 @@ void PriceManager::RemoveFromWatchlist(const std::string& coinId) {
             break;
         }
     }
-
-    SaveWatchlist();
+    // Don't save here - will save on app close
 }
 
 void PriceManager::UpdatePrices() {
@@ -129,10 +203,6 @@ void PriceManager::UpdateThreadFunc() {
 
 bool PriceManager::FetchPricesFromAPI() {
     try {
-        // Create HTTP client for CoinGecko API
-        httplib::Client cli("https://api.coingecko.com");
-        cli.set_connection_timeout(5, 0); // 5 seconds timeout
-
         // Build comma-separated list of coin IDs
         std::string ids;
         {
@@ -143,20 +213,22 @@ bool PriceManager::FetchPricesFromAPI() {
             }
         }
 
-        // Make API request
-        std::string path = "/api/v3/simple/price?ids=" + ids +
+        // Build request path
+        std::string pathStr = "/api/v3/simple/price?ids=" + ids +
             "&vs_currencies=usd&include_24hr_change=true";
+        std::wstring path(pathStr.begin(), pathStr.end());
 
-        auto res = cli.Get(path.c_str());
+        // Make HTTP request using WinHTTP
+        std::string responseBody = HttpGet(L"api.coingecko.com", path);
 
-        if (!res || res->status != 200) {
+        if (responseBody.empty()) {
             std::cerr << "HTTP request failed!" << std::endl;
             is_connected.store(false);
             return false;
         }
 
         // Parse JSON response
-        json data = json::parse(res->body);
+        json data = json::parse(responseBody);
 
         // Update coin prices
         {
@@ -198,24 +270,20 @@ bool PriceManager::FetchPricesFromAPI() {
 
 void PriceManager::SaveWatchlist() {
     try {
-        // Create data directory if it doesn't exist
         if (!fs::exists("data")) {
             fs::create_directory("data");
         }
 
         json watchlist_json = json::array();
 
-        {
-            std::lock_guard<std::mutex> lock(data_mutex);
+        std::lock_guard<std::mutex> lock(data_mutex);
 
-            for (const auto& coin : coins) {
-                if (coin.in_watchlist) {
-                    watchlist_json.push_back(coin.id);
-                }
+        for (const auto& coin : coins) {
+            if (coin.in_watchlist) {
+                watchlist_json.push_back(coin.id);
             }
         }
 
-        // Write to file
         std::ofstream file("data/watchlist.json");
         if (file.is_open()) {
             file << watchlist_json.dump(4);
@@ -245,7 +313,6 @@ void PriceManager::LoadWatchlist() {
         file >> watchlist_json;
         file.close();
 
-        // Mark coins as in watchlist
         std::lock_guard<std::mutex> lock(data_mutex);
 
         for (const auto& coin_id : watchlist_json) {
