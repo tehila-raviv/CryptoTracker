@@ -1,0 +1,82 @@
+# Cryptocurrency Portfolio Tracker
+
+A real-time cryptocurrency price tracking application built with C++ for the Advanced C++ course final project.
+
+## Project Description
+
+This application allows users to track cryptocurrency prices in real-time, maintain a personal watchlist, and monitor 24-hour price changes. The app demonstrates advanced C++ concepts including multithreading, STL containers, file I/O, and modern UI development.
+
+## Features
+
+- **Real-time Price Updates**: Fetches live cryptocurrency prices every 30 seconds
+- **Personal Watchlist**: Add/remove coins to track your favorites
+- **Search & Filter**: Quickly find specific cryptocurrencies
+- **Price Change Indicators**: Color-coded 24h changes (green = up, red = down)
+- **Persistent Storage**: Watchlist automatically saves and loads
+- **Multi-threaded**: Non-blocking UI with background price updates
+
+## Technologies & Libraries
+
+### STL Components
+- `std::vector` - Dynamic arrays for coin storage
+- `std::unordered_map` - Fast key-value storage for coin data
+- `std::fstream` - File I/O for watchlist persistence
+- `std::filesystem` - Directory and file management
+- `std::thread` - Background thread for periodic updates
+- `std::mutex` - Thread-safe data access
+- `std::atomic` - Lock-free thread synchronization
+
+### Third-Party Libraries
+- **ImGui** - Immediate mode GUI framework for the user interface
+- **nlohmann/json** - JSON parsing for API responses
+- **WinHTTP** - Windows native HTTP client for API communication
+
+### API
+- **CoinGecko API** (or CoinCap API) - Free cryptocurrency price data
+
+## Building the Project
+
+### Requirements
+- Visual Studio 2019 or later
+- Windows 10/11
+- C++17 or higher
+
+### Build Steps
+1. Open `CryptoTracker.sln` in Visual Studio
+2. Set configuration to **Debug** or **Release**
+3. Build Solution (Ctrl+Shift+B)
+4. Run - Start Debugging (F5)
+
+## Course Requirements Met
+
+- **STL Usage**: vector, unordered_map, fstream, filesystem  
+- **Threading**: std::thread with background price updates  
+- **Synchronization**: std::mutex and std::atomic for thread safety  
+- **File I/O**: Watchlist persistence using fstream  
+- **Third-Party Libraries**: ImGui, JSON, WinHTTP  
+- **HTTP Client**: WinHTTP for API communication  
+- **User Interface**: ImGui-based interactive UI  
+
+## Implementation Details
+
+### Threading Architecture
+- Main thread: UI rendering (ImGui)
+- Background thread: Price updates every 30 seconds
+- Mutex protection: All shared data access is synchronized
+- Atomic flags: Thread-safe communication (stop signal, connection status)
+
+### Data Flow
+1. Background thread fetches JSON from API
+2. Parse JSON and update coin prices
+3. Lock mutex before modifying shared data
+4. UI reads data (with mutex lock) and displays
+5. User interactions (add/remove) modify data safely
+
+### Why WinHTTP?
+- Is native to Windows (no external dependencies)
+- Has built-in HTTPS/SSL support
+- Is professionally used in Windows applications
+- Simplified the build process
+
+## License
+This project was created for educational purposes as part of the Advanced C++ course.
