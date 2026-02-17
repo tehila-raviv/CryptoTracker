@@ -104,7 +104,7 @@ PriceManager::~PriceManager() {
 
     // Save watchlist before exit
     {
-        std::lock_guard<std::mutex> lock(data_mutex);
+        //std::lock_guard<std::mutex> lock(data_mutex);
         SaveWatchlist();
     }
 }
